@@ -1,0 +1,155 @@
+# Flowz CI Integration
+
+A composite GitHub Action that keeps your Flowz architecture artifacts fresh.
+On every PR in your repo it:
+
+1. checks whether source code changed (doc-only PRs are skipped),
+2. scans the repo into FSG files (the `flowz` scanner),
+3. pushes them to your artifacts repo under `repos/<repo>/fsg/` *(parallel, non-blocking)*,
+4. enriches each FSG into an eFSG (`fsg-enricher`),
+5. pushes those under `repos/<repo>/efsg/` *(parallel, non-blocking)*,
+6. resolves the systems the repo belongs to (`.flowz.yml` ∪ `systems.yaml` on the
+   artifacts repo's `config` branch),
+7. recomputes each system's view, fed all member repos' eFSGs, and
+8. pushes `systems/<system>/system-view.json` *(blocking — this is the product output)*.
+
+Artifacts land on the branch `branch-<your-PR-branch>` of the artifacts repo; git
+history is the artifact version history.
+
+The action is a thin wrapper: it pulls the private, pre-built Flowz binaries
+(`flowz-ci`, the `flowz` scanner, `fsg-enricher`) from GHCR with `oras`, using the
+`read:packages` token flowz issues you, then runs them on your runner. Your code
+never leaves your CI; no Flowz server is in the loop.
+
+## Usage
+
+```yaml
+# .github/workflows/flowz-ci.yml
+name: flowz-ci
+
+on:
+  pull_request:
+  workflow_dispatch: # manual rerun; combine with skip-change-check below if needed
+
+# Rapid pushes to the same PR queue behind each other instead of racing on the
+# same artifacts branch.
+concurrency:
+  group: flowz-ci-${{ github.head_ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read # artifacts-repo writes use the PAT, not GITHUB_TOKEN
+
+jobs:
+  flowz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # change detection needs the merge-base with the target branch
+
+      - uses: flowzhq/github-actions/flowz-ci-integration@v0.1.0
+        with:
+          registry-user: ${{ vars.FLOWZ_REGISTRY_USER }}
+          registry-token: ${{ secrets.FLOWZ_REGISTRY_TOKEN }}
+          artifacts-token: ${{ secrets.FLOWZ_ARTIFACTS_TOKEN }}
+          # Pin the tool versions flowz support gave you:
+          flowz-ci-version: v0.1.0
+          scanner-version: v0.1.0
+          enricher-version: v0.1.0
+          # artifacts-repo: my-org/.flowz-artifacts   # default: <owner>/.flowz-artifacts
+          # skip-change-check: "true"                 # e.g. for workflow_dispatch reruns
+```
+
+**Version pinning.** Pin everything in production:
+
+- the action itself — `flowzhq/github-actions/flowz-ci-integration@vX.Y.Z`
+  (tags cover this whole repo); don't track `main`,
+- `flowz-ci-version` / `scanner-version` / `enricher-version` — the GHCR tags
+  flowz support gives you. `flowz-ci-version` defaults to `latest` as a
+  convenience mirror only; `scanner-version` and `enricher-version` are
+  required for real runs (only `dry-run` works without them).
+
+## Onboarding
+
+**1. Get flowzhq credentials.** flowz issues you a GHCR username + `read:packages`
+token covering the three private packages (`flowz-ci`, `flowz-cli`, `fsg-enricher`),
+plus the tool versions to pin.
+
+**2. Create the artifacts repo** (default name `.flowz-artifacts` in your org):
+
+```bash
+gh repo create my-org/.flowz-artifacts --private
+cd .flowz-artifacts && git commit --allow-empty -m init && git push -u origin main
+git checkout -b config
+cat > systems.yaml <<'EOF'
+version: 1
+systems:
+  my-system:
+    repos: [my-repo]
+EOF
+git add systems.yaml && git commit -m "systems map" && git push -u origin config
+```
+
+`systems.yaml` maps systems to member repos — it is how one repo's PR pulls the
+other members' eFSGs into the system view.
+
+**3. Mint an artifacts PAT.** A your-org token with `contents: read/write` on the
+artifacts repo only. This is separate from the flowzhq token by design: neither side
+holds both credentials.
+
+**4. Configure the source repo.** Set the flowzhq registry creds from step 1 and the
+artifacts PAT from step 3 on the repo that will run the action:
+
+```bash
+gh variable set FLOWZ_REGISTRY_USER  --body  "<GHCR username flowzhq gave you>"
+gh secret   set FLOWZ_REGISTRY_TOKEN --body  "<GHCR read:packages token flowzhq gave you>"
+gh secret   set FLOWZ_ARTIFACTS_TOKEN --body "<your-org PAT, contents:write on .flowz-artifacts>"
+```
+
+Then add the workflow above as `.github/workflows/flowz-ci.yml` and pin the
+versions. Optionally add a `.flowz.yml` at your repo root to declare systems, a
+scan path, or extra change-detection excludes.
+
+## Requirements
+
+- `actions/checkout` with `fetch-depth: 0` **before** the action (change
+  detection needs the merge-base with the target branch).
+- GitHub-hosted **linux/amd64** runners.
+- The action installs `oras` itself (via `oras-project/setup-oras`) and uses it
+  to pull the Flowz binaries from `ghcr.io` — your runner needs network access
+  to `ghcr.io`, and your `registry-token` must have `read:packages` on the
+  three packages.
+- The artifacts repo and its `config` branch must exist before the first run
+  (step 2 above) — the action errors with an onboarding message rather than
+  auto-creating repos.
+
+## Inputs & outputs
+
+| Input | Required | Notes |
+| --- | --- | --- |
+| `registry-user` / `registry-token` | yes | flowzhq GHCR creds (read:packages) |
+| `artifacts-token` | yes (real runs) | customer-org PAT, contents:write on the artifacts repo |
+| `artifacts-repo` | no | default `<owner>/.flowz-artifacts` |
+| `flowz-ci-version` | no (`latest`) | pin in production |
+| `scanner-version` / `enricher-version` | yes (real runs) | pinned GHCR tags |
+| `scan-path` | no (`.`) | scan root |
+| `skip-change-check` | no (`false`) | run even for doc-only changes |
+| `dry-run` | no (`false`) | print the plan, execute nothing |
+
+Outputs: `skipped`, `systems` (comma-separated), `artifacts-branch`. A human summary
+lands in the job's step summary.
+
+## The artifacts-repo layout
+
+```yml
+# on branch-<pr-source-branch>
+repos/<repo>/fsg/<scanner-output>.json.gz
+repos/<repo>/efsg/<base>.efsg.json.gz
+systems/<system>/system-view.json
+# on the config branch
+systems.yaml
+```
+
+Commits are additive (never force-pushed); concurrent PRs from different repos
+rebase cleanly.
