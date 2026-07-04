@@ -16,7 +16,7 @@ There is nothing to build or test here — it's YAML + bash + docs. No Makefile.
 
 ## 2. Layout
 
-```
+```txt
 CLAUDE.md                 conventions (this file)
 README.md                 repo overview + index of actions
 docs/adr/                 decisions — 000-adr-process.md, README.md (index), NNN-*.md
