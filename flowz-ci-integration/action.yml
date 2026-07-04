@@ -52,6 +52,10 @@ inputs:
     description: "Print the resolved context and planned pipeline without executing (true/false)."
     required: false
     default: "false"
+  viewer-base-url:
+    description: "flowz-viewer base URL used in the PR architecture comment's links. Override for self-hosted viewers."
+    required: false
+    default: "https://flowzhq.github.io/viewer"
   flowz-ci-bin:
     description: "Internal (CI self-test): path to a prebuilt flowz-ci binary; skips all GHCR pulls."
     required: false
@@ -93,6 +97,11 @@ runs:
         FLOWZ_CI_BIN: ${{ inputs.flowz-ci-bin }}
         FLOWZ_CI_ARTIFACTS_TOKEN: ${{ inputs.artifacts-token }}
         FLOWZ_CI_ARTIFACTS_REPO: ${{ inputs.artifacts-repo }}
+        FLOWZ_CI_VIEWER_BASE_URL: ${{ inputs.viewer-base-url }}
+        # github.token, not secrets.GITHUB_TOKEN — composite actions can't read
+        # secrets.*, but the github context flows in. Used only for the PR
+        # architecture comment (needs permissions: pull-requests: write).
+        GITHUB_TOKEN: ${{ github.token }}
         SCAN_PATH: ${{ inputs.scan-path }}
         SKIP_CHANGE_CHECK: ${{ inputs.skip-change-check }}
         DRY_RUN: ${{ inputs.dry-run }}

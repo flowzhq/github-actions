@@ -10,8 +10,10 @@ On every PR in your repo it:
 5. pushes those under `repos/<repo>/efsg/` *(parallel, non-blocking)*,
 6. resolves the systems the repo belongs to (`.flowz.yml` ∪ `systems.yaml` on the
    artifacts repo's `config` branch),
-7. recomputes each system's view, fed all member repos' eFSGs, and
-8. pushes `systems/<system>/system-view.json` *(blocking — this is the product output)*.
+7. recomputes each system's view, fed all member repos' eFSGs,
+8. pushes `systems/<system>/system-view.json` *(blocking — this is the product output)*, and
+9. posts (or updates in place) a PR comment linking each recomputed system to its
+   [flowz-viewer](https://flowzhq.github.io/viewer/) architecture view *(non-blocking)*.
 
 Artifacts land on the branch `branch-<your-PR-branch>` of the artifacts repo; git
 history is the artifact version history.
@@ -39,6 +41,7 @@ concurrency:
 
 permissions:
   contents: read # artifacts-repo writes use the PAT, not GITHUB_TOKEN
+  pull-requests: write # the PR architecture comment (posted with github.token)
 
 jobs:
   flowz:
@@ -123,6 +126,10 @@ scan path, or extra change-detection excludes.
 - The artifacts repo and its `config` branch must exist before the first run
   (step 2 above) — the action errors with an onboarding message rather than
   auto-creating repos.
+- `permissions: pull-requests: write` on the job (workflow above) lets the
+  action post its PR architecture comment with the workflow's own
+  `github.token` — no extra secret. Without it the comment fails with a
+  warning; artifacts still land and the run stays green.
 
 ## Inputs & outputs
 
@@ -136,6 +143,7 @@ scan path, or extra change-detection excludes.
 | `scan-path` | no (`.`) | scan root |
 | `skip-change-check` | no (`false`) | run even for doc-only changes |
 | `dry-run` | no (`false`) | print the plan, execute nothing |
+| `viewer-base-url` | no (`https://flowzhq.github.io/viewer`) | PR-comment link target; override for self-hosted viewers |
 
 Outputs: `skipped`, `systems` (comma-separated), `artifacts-branch`. A human summary
 lands in the job's step summary.
