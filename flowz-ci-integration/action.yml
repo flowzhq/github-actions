@@ -107,6 +107,18 @@ runs:
         DRY_RUN: ${{ inputs.dry-run }}
       run: |
         set -euo pipefail
+        # flowz-ci commits/rebases the artifacts repo via git. CI runners have no
+        # default git identity, so the rebase-on-conflict path (two repos in a
+        # system push to the shared artifacts repo concurrently) dies with
+        # "empty ident name / Committer identity unknown". Set a fallback identity
+        # here so every consumer is covered without a per-repo step. Only set it if
+        # the caller hasn't already configured one.
+        if ! git config --get user.email >/dev/null 2>&1; then
+          git config --global user.email "flowz-ci-bot@users.noreply.github.com"
+        fi
+        if ! git config --get user.name >/dev/null 2>&1; then
+          git config --global user.name "flowz-ci[bot]"
+        fi
         bin="${FLOWZ_CI_BIN:-flowz-ci}"
         "$bin" version
         args=(run --repo-path "$SCAN_PATH")
