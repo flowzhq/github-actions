@@ -51,7 +51,7 @@ jobs:
         with:
           fetch-depth: 0 # change detection needs the merge-base with the target branch
 
-      - uses: flowzhq/github-actions/flowz-ci-integration@v0.1.0
+      - uses: flowzhq/github-actions/flowz-ci-integration@v0.1.1
         with:
           registry-user: ${{ vars.FLOWZ_REGISTRY_USER }}
           registry-token: ${{ secrets.FLOWZ_REGISTRY_TOKEN }}
@@ -63,6 +63,11 @@ jobs:
           # artifacts-repo: my-org/.flowz-artifacts   # default: <owner>/.flowz-artifacts
           # skip-change-check: "true"                 # e.g. for workflow_dispatch reruns
 ```
+
+**Git identity.** As of `v0.1.1` the action sets a fallback committer identity
+(`flowz-ci[bot]`) before running, so the artifacts push/rebase works on runners
+that have no default identity — no per-repo `git config` step needed. A caller
+that configures its own `user.name`/`user.email` first still wins.
 
 **Version pinning.** Pin everything in production:
 
