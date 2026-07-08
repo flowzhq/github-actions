@@ -125,3 +125,39 @@ runs:
         if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
         if [ "$SKIP_CHANGE_CHECK" = "true" ]; then args+=(--skip-change-check); fi
         "$bin" "${args[@]}"
+
+    - name: Notify the artifacts aggregator to recompute system-views
+      # A system-view is a cross-repo aggregate: only the artifacts repo sees every
+      # member's eFSG land, so it owns the recompute (its recompute-system-views
+      # workflow, keyed by branch). This step tells it "this branch's eFSG set
+      # changed" so it recomputes from the FULL set — that's what lets one repo's
+      # PR view refresh as sibling repos land on the same branch.
+      #
+      # Non-blocking on purpose (like the PR comment): the run already pushed the
+      # artifacts; a failed dispatch just means the view waits for the next eFSG
+      # push or a manual run. Skips doc-only runs (nothing to recompute), non-PR
+      # events, dry-runs, and the self-test path.
+      if: ${{ inputs.flowz-ci-bin == '' && inputs.dry-run != 'true' && github.event_name == 'pull_request' && inputs.artifacts-token != '' && steps.run.outputs.skipped != 'true' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.artifacts-token }}      # PAT with write on the artifacts repo (repository_dispatch)
+        ARTIFACTS_REPO: ${{ inputs.artifacts-repo }}
+        OWNER: ${{ github.repository_owner }}
+        BRANCH: ${{ steps.run.outputs.artifacts-branch }}
+        REPO_NAME: ${{ github.event.repository.name }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+      run: |
+        set -uo pipefail
+        target="${ARTIFACTS_REPO:-$OWNER/.flowz-artifacts}"
+        # repository_dispatch needs an owner/name target; a full clone URL can't be dispatched to.
+        case "$target" in
+          *://* | */*/* ) echo "::notice::skipping aggregator dispatch — artifacts-repo '$target' is not owner/name"; exit 0 ;;
+        esac
+        if [ -z "$BRANCH" ]; then echo "::notice::no artifacts branch to recompute — skipping dispatch"; exit 0; fi
+        body="$(jq -n --arg b "$BRANCH" --arg r "$REPO_NAME" --arg pr "$PR_NUMBER" \
+          '{event_type:"efsg-updated", client_payload:{branch:$b, repo:$r, pr:$pr}}')"
+        if printf '%s' "$body" | gh api "repos/$target/dispatches" --input - ; then
+          echo "dispatched efsg-updated → $target (branch=$BRANCH repo=$REPO_NAME pr=#$PR_NUMBER)"
+        else
+          echo "::warning::aggregator dispatch to $target failed — system-views will recompute on the next eFSG push or a manual run"
+        fi
