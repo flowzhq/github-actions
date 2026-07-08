@@ -44,6 +44,10 @@ inputs:
     description: "Path to scan, relative to the workspace."
     required: false
     default: "."
+  scan-mode:
+    description: "Scan-mode override: single | monorepo | components. Blank uses the repo's .flowz.yml scan.mode (default monorepo). Lets a multi-FSG repo pick components/monorepo from the workflow with no committed .flowz.yml. Requires flowz-ci >= v0.5.0."
+    required: false
+    default: ""
   skip-change-check:
     description: "Run even when no source changed (true/false) — e.g. for workflow_dispatch reruns."
     required: false
@@ -115,6 +119,8 @@ runs:
         # architecture comment (needs permissions: pull-requests: write).
         GITHUB_TOKEN: ${{ github.token }}
         SCAN_PATH: ${{ inputs.scan-path }}
+        # flowz-ci reads FLOWZ_CI_SCAN_MODE as the default for its --scan-mode flag; blank = no override.
+        FLOWZ_CI_SCAN_MODE: ${{ inputs.scan-mode }}
         SKIP_CHANGE_CHECK: ${{ inputs.skip-change-check }}
         DRY_RUN: ${{ inputs.dry-run }}
         # External config injection (ADR-009): flowz-ci clones these files and
