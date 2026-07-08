@@ -13,10 +13,20 @@ On every PR in your repo it:
 7. recomputes each system's view, fed all member repos' eFSGs,
 8. pushes `systems/<system>/system-view.json` *(blocking — this is the product output)*, and
 9. posts (or updates in place) a PR comment linking each recomputed system to its
-   [flowz-viewer](https://flowzhq.github.io/viewer/) architecture view *(non-blocking)*.
+   [flowz-viewer](https://flowzhq.github.io/viewer/) architecture view *(non-blocking)*, and
+10. notifies the artifacts repo (`repository_dispatch: efsg-updated`) that this
+    branch's eFSG set changed, so its aggregator can recompute the system-views
+    from the full set once every member has landed *(non-blocking)*.
 
 Artifacts land on the branch `branch-<your-PR-branch>` of the artifacts repo; git
 history is the artifact version history.
+
+> **Why step 10:** a system-view spans repos, but each PR run only sees its own
+> repo's fresh eFSG plus whatever peers had already landed — so when sibling repos
+> push on the same branch afterwards, this run can't refresh the view. The artifacts
+> repo is the only place that sees every member land, so it owns the recompute; this
+> dispatch is how a run tells it to. Requires an `efsg-updated`-triggered workflow on
+> the artifacts repo (see the `.flowz-artifacts` README).
 
 The action is a thin wrapper: it pulls the private, pre-built Flowz binaries
 (`flowz-ci`, the `flowz` scanner, `fsg-enricher`) from GHCR with `oras`, using the
