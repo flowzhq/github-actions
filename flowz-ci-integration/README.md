@@ -156,6 +156,7 @@ scan path, or extra change-detection excludes.
 | `flowz-ci-version` | no (`latest`) | pin in production |
 | `scanner-version` / `enricher-version` | yes (real runs) | pinned GHCR tags |
 | `scan-path` | no (`.`) | scan root |
+| `scan-mode` | no | override scan mode: `single` \| `monorepo` \| `components`; blank uses `.flowz.yml` (default `monorepo`). Requires `flowz-ci >= v0.5.0` |
 | `skip-change-check` | no (`false`) | run even for doc-only changes |
 | `dry-run` | no (`false`) | print the plan, execute nothing |
 | `viewer-base-url` | no (`https://flowzhq.github.io/viewer`) | PR-comment link target; override for self-hosted viewers |
