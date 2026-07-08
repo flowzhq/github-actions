@@ -159,6 +159,9 @@ scan path, or extra change-detection excludes.
 | `skip-change-check` | no (`false`) | run even for doc-only changes |
 | `dry-run` | no (`false`) | print the plan, execute nothing |
 | `viewer-base-url` | no (`https://flowzhq.github.io/viewer`) | PR-comment link target; override for self-hosted viewers |
+| `external-config-repo` | no | pull another repo's config files into the scan (owner/name or URL); they surface as ExternalFile nodes |
+| `external-config-files` | no | repo-relative files from `external-config-repo` (comma/space separated) |
+| `external-config-token` | no | read token (secret) for a private `external-config-repo`; blank for public |
 
 Outputs: `skipped`, `systems` (comma-separated), `artifacts-branch`. A human summary
 lands in the job's step summary.

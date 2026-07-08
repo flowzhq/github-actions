@@ -56,6 +56,18 @@ inputs:
     description: "flowz-viewer base URL used in the PR architecture comment's links. Override for self-hosted viewers."
     required: false
     default: "https://flowzhq.github.io/viewer"
+  external-config-repo:
+    description: "Config repo whose files to pull into the scan (owner/name or clone URL), e.g. an infra repo declaring shared config. Its files surface as ExternalFile nodes; nothing is committed to the scanned repo. (ADR-009)"
+    required: false
+    default: ""
+  external-config-files:
+    description: "Repo-relative files from external-config-repo to wire into the scan (comma/space separated)."
+    required: false
+    default: ""
+  external-config-token:
+    description: "Read token for a private external-config-repo. Pass a secret. Blank for a public config repo."
+    required: false
+    default: ""
   flowz-ci-bin:
     description: "Internal (CI self-test): path to a prebuilt flowz-ci binary; skips all GHCR pulls."
     required: false
@@ -105,6 +117,11 @@ runs:
         SCAN_PATH: ${{ inputs.scan-path }}
         SKIP_CHANGE_CHECK: ${{ inputs.skip-change-check }}
         DRY_RUN: ${{ inputs.dry-run }}
+        # External config injection (ADR-009): flowz-ci clones these files and
+        # wires them into the scan via a generated flowz.config.json.
+        FLOWZ_CI_EXTERNAL_CONFIG_REPO: ${{ inputs.external-config-repo }}
+        FLOWZ_CI_EXTERNAL_CONFIG_FILES: ${{ inputs.external-config-files }}
+        FLOWZ_CI_EXTERNAL_CONFIG_TOKEN: ${{ inputs.external-config-token }}
       run: |
         set -euo pipefail
         # flowz-ci commits/rebases the artifacts repo via git. CI runners have no
